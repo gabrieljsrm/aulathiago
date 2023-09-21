@@ -1,45 +1,67 @@
-const express = require('express');
-const app = express()
+const express = require("express");
+const app = express();
 const redis = require("redis");
-const host = "127.0.0.1"
-const port = 6379; //defalt Redis port
-const clientRedis = redis.createClient(port, host)
+const host = "127.0.0.1";
+const port = 6379; // default Redis port
+const client = redis.createClient(port, host);
 
-const getAllClients = () => {
-    const time = Math.random() * 8000;
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            resolve(
-                [{
-                        "nome": "Thiago Xavier"
-                    },
-                    {
-                        "nome": "Aluno 1"
-                    }
-                ]
-            )
-        }, time)
-    })
-}
+app.use(express.json());
 
+let clientes = [
+    {
+      nome: "Thiago Xavier",
+    },
+    {
+      nome: "Gabriel Monteiro",
+    },
+];
 
-app.get("/", async(req, res) => {
+const getAllClientes = async () => {
+  const time = Math.random() * 8000;
 
-    //criando um cache
-    clientRedis.set("nome", "gabriel");
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve(clientes);
+    }, time);
+  });
+};
 
-    //const clients = await getAllClients();
+app.post("/", async (req, res) => {
+  //console.log("Salvado infos", req.body);
+  clientes.push(req.body)
 
-    res.status(200).send()
-})
+  await client.del("clientes");
+  res.status(200).send("removido com sucesso");
+});
 
+app.get("/", async (req, res) => {
+  const chave = "clientes";
 
-const startup = async()=>{
-    //conectar ao redis
-    await clientRedis.connect();
-    app.listen(3000, () => {
-        console.log("Server is running on port 3000")
-    })
-}
+  try {
+    const clientFromCache = await client.get(chave);
+    if (clientFromCache) {
+      const objetoCliente = JSON.parse(clientFromCache);
+      res.status(200).send(objetoCliente);
+      return;
+    }
+
+    const clientes = await getAllClientes();
+
+    // configurar o cache
+    await client.set(chave, JSON.stringify(clientes), "EX", 20);
+    res.status(200).send(clientes);
+  } catch (e) {
+    res.status(500).send("Ocorreu um erro");
+  }
+});
+
+const startup = async () => {
+  // conectar o redis
+  await client.connect();
+
+  app.listen(3000, () => {
+    console.log("Server is running on port 3000");
+  });
+};
 
 startup();
